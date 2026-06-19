@@ -1,0 +1,60 @@
+# Project Context
+ClipCordon is an AI x Web3 hackathon project for AI payment decisions. The repo intentionally contains two independent npm packages: `agent/` for the local Node + TypeScript worker, and `web/` for the Next.js App Router dashboard. Do not convert this into a monorepo, pnpm workspace, or shared package setup.
+
+Ideal user role: 跨平台直播电商切片工作室 / TikTok Shop UGC agency.
+
+Pain point: 直播回放被切成带货短视频后，要同时发 TikTok、Reels、Shorts，但主播 IP 授权、商品挂链、BGM/字幕模板/音效的商用范围分散，很多平台音乐只允许站内使用；人工逐条核验太慢，出问题后也拿不出可审计凭证。
+
+Needed agent: 一个能感知 / 能决策 / 能上链的 AI Agent。LiveClip Rights Agent 能读取直播 brief、目标发布平台、素材授权条款和供应商声誉，判断每条切片是否可跨平台商用；如果授权不够，就自动选择 ERC-8004 注册过的素材 Supplier Agent，用 AgentKit 执行 x402 微支付采购替代 BGM/SFX/字幕模板授权。
+
+Core action: 为每条直播切片生成一份 Clip Rights Manifest，包含主播授权状态、商品链接匹配结果、素材来源、license scope、supplier_agent_id、付款 tx、manifest hash，并标记这条视频是否可发布到 TikTok / Reels / Shorts。
+
+Key on-chain evidence: 关键链上动作必须是真实可在 Explorer 查到的 TX。LiveClip Agent 钱包通过 x402 在 Base Sepolia 向 BGM/SFX/Caption Supplier Agent 支付 USDC；随后调用 Clip402RightsRegistry 合约写入 `clip_id + supplier_agent_id + license_receipt_hash + clip_manifest_hash + target_platforms`。Explorer 上能看到两类证据：USDC payment TX，以及 Registry event TX。
+
+Demo magic moment: 用户只输入“把这场跑鞋直播切成 3 条 TikTok + Reels + Shorts 都能发的带货短视频”，Agent 自动发现第 2 条的 BGM 只允许 TikTok 站内使用，于是自己付款采购跨平台商用音效，并生成一份链上可验证的授权清单。用户如果把切片账号从“0粉新号”切换到“百万粉大V”时，Agent 去采购同一首 BGM，终端瞬间爆出红字提示：版权方 Agent 查到其极高的 ERC-8004 声誉，不仅免收 x402 授权费，反而倒打 0.5 USDC 求曝光，用户的钱包余额不减反增。实现能与版权方 Agent 动态博弈定价，并自动执行 x402 微支付的“看人下菜碟”智能采购 Agent。
+
+# Tech Stack
+- TypeScript everywhere.
+- `agent/`: Node.js, `tsx`, OpenAI-compatible LLM client, `viem`, future x402 payment flow.
+- `web/`: latest Next.js App Router, React, Tailwind CSS, `viem`, `recharts`.
+- `contracts/`: Solidity contract intended for Remix deployment, not part of a build chain.
+- No database. Use on-chain events for payment receipts or a future `snapshot.json` for data snapshots.
+
+# Style
+- Keep the D1 loop small and easy to demo: signal -> LLM decision -> mock paid endpoint -> receipt placeholder -> notification placeholder.
+- Prefer explicit types and small functions over broad abstractions.
+- Wrap every external HTTP, RPC, and LLM call in try/catch with one retry, then warn and skip the current round instead of crashing.
+- Follow existing package boundaries. `agent/` and `web/` install and run independently.
+
+# Autonomy（决策授权 5 等级）
+
+## L0 (NEVER do without explicit confirmation)
+- 主网 / 涉及真实资产的交易
+- 修改或读取 .env / secrets / 私钥 / 助记词文件
+- 删除文件 / 删除 git 分支 / 强制 push
+- 跳过 lint / 跳过 test / 跳过 pre-commit hook
+- 安装来源不明的新依赖（npm install 一个我没提过的包）
+
+## L1 (Announce intent first, wait for OK)
+- 修改 package.json 的 dependencies / scripts
+- 修改 .cursorrules / AGENTS.md
+- 重命名 public exports（其他文件依赖它）
+
+## L2 (Do, then report)
+- 重构内部函数（不改对外签名）
+- 添加错误处理 / 日志
+- 调整内部目录结构
+
+## L3 (Just do, brief mention is enough)
+- 改 console 输出格式
+- 添加 / 改写代码注释
+- 修拼写 / 语法错误
+
+## L4 (Fully autonomous)
+- 跑 lint / typecheck
+- 自动格式化代码
+
+## Always Required
+- 修改前必须能跑 git diff 看到你改了什么
+- 跨文件改动 > 3 个文件时，最后给一段 changelog
+- 任何对外网请求的新增 / 修改必须在 L1 以上等级

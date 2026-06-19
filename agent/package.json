@@ -1,0 +1,23 @@
+{
+  "name": "hackcamp-w2-clipcordon-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node node_modules/tsx/dist/cli.mjs src/index.ts",
+    "typecheck": "node node_modules/typescript/lib/tsc.js --noEmit"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "openai": "^6.44.0",
+    "viem": "^2.52.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

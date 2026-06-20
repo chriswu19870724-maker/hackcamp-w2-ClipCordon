@@ -116,6 +116,3 @@ The script first performs an x402 paid fetch, then writes a `ReceiptIssued` even
 
 All HTTP, RPC, and LLM calls are wrapped with one retry. If both attempts fail, the current round logs a warning and skips instead of crashing the process.
 
-## Polymarket Note
-
-For future market-data integrations, use Polymarket CLOB V2 at `https://clob.polymarket.com`. Legacy V1 SDKs and V1-signed orders are no longer the production target.

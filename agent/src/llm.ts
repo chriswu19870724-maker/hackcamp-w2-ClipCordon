@@ -1,5 +1,6 @@
 import "dotenv/config";
 import OpenAI from "openai";
+import { withExternalCall } from "./external.js";
 
 export type PaymentSignal = {
   id: string;
@@ -20,19 +21,6 @@ const model = process.env.LLM_MODEL || "deepseek-chat";
 
 const client = new OpenAI({ apiKey: apiKey || "missing-key", baseURL });
 
-async function withOneRetry<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      return await fn();
-    } catch (error) {
-      console.warn(`[warn] ${label} failed on attempt ${attempt}:`, error);
-    }
-  }
-
-  console.warn(`[warn] ${label} failed after retry; skipping this round.`);
-  return null;
-}
-
 export async function decidePayment(signal: PaymentSignal): Promise<PaymentDecision | null> {
   if (!apiKey) {
     console.warn("[warn] LLM_API_KEY is not set; using a local placeholder decision.");
@@ -43,37 +31,46 @@ export async function decidePayment(signal: PaymentSignal): Promise<PaymentDecis
     };
   }
 
-  return withOneRetry("LLM decision", async () => {
-    const completion = await client.chat.completions.create({
-      model,
-      messages: [
-        {
-          role: "system",
-          content: [
-            "You are ClipCordon, an AI payment guard.",
-            "Decide whether a small payment should proceed.",
-            'Reply ONLY with a JSON object (no markdown fences) matching this shape:',
-            '{"action":"pay"|"skip","reason":"<one sentence>","amountUsd":<number>}',
-          ].join(" "),
-        },
-        {
-          role: "user",
-          content: `Signal: ${JSON.stringify(signal)}`,
-        },
-      ],
-    });
+  return withExternalCall({
+    label: "LLM decision",
+    context: { signalId: signal.id, source: signal.source, model, baseURL },
+    fn: async () => {
+      const completion = await client.chat.completions.create({
+        model,
+        messages: [
+          {
+            role: "system",
+            content: [
+              "You are ClipCordon, an AI payment guard.",
+              "Decide whether a small payment should proceed.",
+              'Reply ONLY with a JSON object (no markdown fences) matching this shape:',
+              '{"action":"pay"|"skip","reason":"<one sentence>","amountUsd":<number>}',
+            ].join(" "),
+          },
+          {
+            role: "user",
+            content: `Signal: ${JSON.stringify(signal)}`,
+          },
+        ],
+      });
 
-    const raw = completion.choices[0]?.message.content?.trim() ?? "";
+      const raw = completion.choices[0]?.message.content?.trim() ?? "";
 
-    // strip optional markdown fences the model might still add
-    const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
+      // Strip optional markdown fences the model might still add.
+      const jsonText = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
 
-    try {
-      const parsed = JSON.parse(jsonText) as PaymentDecision;
-      if (!parsed.action || !parsed.reason) throw new Error("missing fields");
-      return parsed;
-    } catch {
-      return { action: "skip", reason: raw || "LLM returned unparseable response.", amountUsd: 0 };
-    }
+      try {
+        const parsed = JSON.parse(jsonText) as PaymentDecision;
+        if (!parsed.action || !parsed.reason) throw new Error("missing fields");
+        return parsed;
+      } catch (error) {
+        console.warn("[warn] LLM response parse failed; using skip decision.", {
+          signalId: signal.id,
+          raw,
+          error,
+        });
+        return { action: "skip", reason: raw || "LLM returned unparseable response.", amountUsd: 0 };
+      }
+    },
   });
 }

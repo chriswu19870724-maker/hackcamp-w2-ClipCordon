@@ -3,22 +3,15 @@ pragma solidity ^0.8.20;
 
 contract PaymentReceipt {
     event ReceiptIssued(
-        bytes32 indexed decisionId,
         address indexed payer,
-        string action,
-        string reason,
-        uint256 amountUsd,
-        string metadataURI
+        address indexed payee,
+        uint256 amount,
+        string memo,
+        uint256 timestamp
     );
 
-    function issueReceipt(
-        bytes32 decisionId,
-        string calldata action,
-        string calldata reason,
-        uint256 amountUsd,
-        string calldata metadataURI
-    ) external returns (bytes32) {
-        emit ReceiptIssued(decisionId, msg.sender, action, reason, amountUsd, metadataURI);
-        return decisionId;
+    // Agent 每完成一次决策/支付，调一次这个函数，把"凭证"写上链
+    function issueReceipt(address payee, uint256 amount, string calldata memo) external {
+        emit ReceiptIssued(msg.sender, payee, amount, memo, block.timestamp);
     }
 }

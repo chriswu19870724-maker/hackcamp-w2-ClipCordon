@@ -7,13 +7,9 @@ One-liner: 给 TikTok Shop UGC 代理和直播切片工作室用的 AI 授权采
 核心场景:
 
 - 用户角色: 跨平台直播电商切片工作室 / TikTok Shop UGC agency
-
 - 痛点: 直播回放被切成带货短视频后，要同时发 TikTok、Reels、Shorts，但主播 IP 授权、商品挂链、BGM/字幕模板/音效的商用范围分散，很多平台音乐只允许站内使用；人工逐条核验太慢，出问题后也拿不出可审计凭证。
-
 - AI Agent 的动作: 一个能读取直播 brief、目标发布平台、素材授权条款和供应商声誉的 LiveClip Rights Agent，判断每条切片是否可跨平台商用；如果授权不够，就自动选择 ERC-8004 注册过的素材 Supplier Agent，用 AgentKit 执行 x402 微支付采购替代 BGM/SFX/字幕模板授权。为每条直播切片生成一份 Clip Rights Manifest：包含主播授权状态、商品链接匹配结果、素材来源、license scope、supplier_agent_id、付款 tx、manifest hash，并标记这条视频是否可发布到 TikTok / Reels / Shorts。
-
 - 关键链上动作: 真实可在 Explorer 查到的 TX。LiveClip Agent 钱包通过 x402 在 Base Sepolia 向 BGM/SFX/Caption Supplier Agent 支付 USDC；随后调用 Clip402RightsRegistry 合约写入：clip_id + supplier_agent_id + license_receipt_hash + clip_manifest_hash + target_platforms。Explorer 上能看到两类证据：USDC payment TX，以及 Registry event TX。
-
 - 演示视频的魔法时刻: 用户只输入"把这场跑鞋直播切成 3 条 TikTok + Reels + Shorts 都能发的带货短视频"，Agent 自动发现第 2 条的 BGM 只允许 TikTok 站内使用，于是自己付款采购跨平台商用音效，并生成一份链上可验证的授权清单。用户如果把切片账号从"0粉新号"切换到"百万粉大V"时，Agent 去采购同一首 BGM，终端瞬间爆出红字提示：版权方 Agent 查到其极高的 ERC-8004 声誉，不仅免收 x402 授权费，反而倒打 0.5 USDC 求曝光，用户的钱包余额不减反增！实现能与版权方 Agent 动态博弈定价，并自动执行 x402 微支付的"看人下菜碟"智能采购 Agent。
 
 本周（Week 2）进度计划:
@@ -40,6 +36,7 @@ One-liner: 给 TikTok Shop UGC 代理和直播切片工作室用的 AI 授权采
 
 ## L0 (NEVER do without explicit confirmation)
 - 主网 / 涉及真实资产的交易
+- 任何会超过 x402 预算上限的支付（Week 2 总预算 1 USDC、单次 0.05 USDC、单日 0.2 USDC）
 - 修改或读取 .env / secrets / 私钥 / 助记词文件
 - 删除文件 / 删除 git 分支 / 强制 push
 - 跳过 lint / 跳过 test / 跳过 pre-commit hook

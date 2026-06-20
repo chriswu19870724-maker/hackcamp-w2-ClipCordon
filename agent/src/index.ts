@@ -4,19 +4,11 @@ import { decidePayment, type PaymentSignal } from "./llm.js";
 import { sendTGAlert } from "./notify.js";
 import { issueReceipt } from "./receipt.js";
 import { payWithX402 } from "./x402.js";
+import { httpStatusError, sleep, withExternalCall } from "./external.js";
 
-async function withOneRetry<T>(label: string, fn: () => Promise<T>): Promise<T | null> {
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      return await fn();
-    } catch (error) {
-      console.warn(`[warn] ${label} failed on attempt ${attempt}:`, error);
-    }
-  }
-
-  console.warn(`[warn] ${label} failed after retry; skipping this round.`);
-  return null;
-}
+const MIN_POLL_INTERVAL_MS = 60_000;
+const configuredPollIntervalMs = Number(process.env.AGENT_POLL_INTERVAL_MS || MIN_POLL_INTERVAL_MS);
+const pollIntervalMs = Math.max(MIN_POLL_INTERVAL_MS, configuredPollIntervalMs);
 
 function startPaidMockServer(): Promise<Server> {
   const port = Number(process.env.PAID_MOCK_PORT || 8787);
@@ -51,13 +43,17 @@ function startPaidMockServer(): Promise<Server> {
 async function fetchPaidMock(): Promise<unknown | null> {
   const url = process.env.PAID_MOCK_URL || "http://127.0.0.1:8787/paid-mock";
 
-  return withOneRetry("paid mock HTTP call", async () => {
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(`paid mock returned ${response.status}`);
-    }
+  return withExternalCall({
+    label: "paid mock HTTP call",
+    context: { url },
+    fn: async () => {
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw httpStatusError(`paid mock returned ${response.status}`, response.status);
+      }
 
-    return response.json() as Promise<unknown>;
+      return response.json() as Promise<unknown>;
+    },
   });
 }
 
@@ -80,8 +76,12 @@ async function runOnce(): Promise<void> {
   console.log("[agent] /paid-mock response:", paidMock);
 
   const payment = await payWithX402(decision);
+  if (!payment) return;
+
   const receiptId = await issueReceipt({ decision, paymentId: payment.paymentId });
-  await sendTGAlert(`Decision ${decision.action}: ${decision.reason}. Receipt: ${receiptId ?? "skipped"}`);
+  if (!receiptId) return;
+
+  await sendTGAlert(`Decision ${decision.action}: ${decision.reason}. Receipt: ${receiptId}`);
 }
 
 async function main(): Promise<void> {
@@ -89,9 +89,19 @@ async function main(): Promise<void> {
 
   try {
     server = await startPaidMockServer();
-    await runOnce();
+    console.log(`[agent] poll interval: ${pollIntervalMs}ms`);
+
+    while (true) {
+      try {
+        await runOnce();
+      } catch (error) {
+        console.warn("[warn] agent round failed unexpectedly; next round will continue.", { error });
+      }
+
+      await sleep(pollIntervalMs);
+    }
   } catch (error) {
-    console.warn("[warn] agent round failed; process will exit cleanly:", error);
+    console.warn("[warn] agent startup failed; process will exit cleanly.", { error });
   } finally {
     server?.close();
   }

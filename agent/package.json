@@ -8,6 +8,8 @@
     "typecheck": "node node_modules/typescript/lib/tsc.js --noEmit"
   },
   "dependencies": {
+    "@x402/evm": "^2.16.0",
+    "@x402/fetch": "^2.16.0",
     "dotenv": "^17.4.2",
     "openai": "^6.44.0",
     "viem": "^2.52.2"

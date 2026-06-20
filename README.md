@@ -89,6 +89,29 @@ The dashboard uses viem `getLogs` with `createPublicClient` and `http()` to read
 
 `contracts/PaymentReceipt.sol` is intended for D2 Remix deployment. It emits `ReceiptIssued` for each payment decision and is not wired into a local build chain.
 
+## Week 2 Base Sepolia Proofs
+
+The current demo path uses x402 on Base Sepolia and anchors a receipt event with `PaymentReceipt`.
+
+- x402 test endpoint: `http://localhost:4021/weather`
+- PaymentReceipt contract: `0xc7A09816Ce3D3e01A2Ae0483E76957d31FcDdf20`
+- PaymentReceipt deploy TX: `https://sepolia.basescan.org/tx/0xba4765e7b8126831615a9dbd168b29d7624e4e415a0c10486b1fb02dc51fb2ec`
+- x402 automatic payment TX: `https://sepolia.basescan.org/tx/0xa6b65fce9aca6c7b3a7573c131877a457e5f7fd653706d56318578aaab6a8ad2`
+- ReceiptIssued anchor TX: `https://sepolia.basescan.org/tx/0xebafbbdd52352315d11b747b973ead482fefaaaf81e835e040b6c9c05ab1a703`
+
+Run the full manual anchor path:
+
+```bash
+cd agent
+BASE_SEPOLIA_RPC=https://sepolia.base.org node node_modules/tsx/dist/cli.mjs src/registry.ts \
+  "http://localhost:4021/weather" \
+  0x09693eDeDA8925bEA9Af29353B04384BF726a44d \
+  1000 \
+  "ClipCordon registry anchor"
+```
+
+The script first performs an x402 paid fetch, then writes a `ReceiptIssued` event whose memo includes the x402 payment TX.
+
 ## External Calls
 
 All HTTP, RPC, and LLM calls are wrapped with one retry. If both attempts fail, the current round logs a warning and skips instead of crashing the process.

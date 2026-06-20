@@ -1,5 +1,5 @@
 import { createPublicClient, http, parseAbiItem, type Address } from "viem";
-import { polygonAmoy } from "viem/chains";
+import { baseSepolia } from "viem/chains";
 import { ReceiptChart, type ChartReceipt } from "./ReceiptChart";
 
 type DashboardReceipt = ChartReceipt & {
@@ -43,14 +43,14 @@ async function fetchChainReceipts(): Promise<DashboardReceipt[]> {
 
   const logs = await withOneRetry("receipt getLogs RPC call", async () => {
     const client = createPublicClient({
-      chain: polygonAmoy,
+      chain: baseSepolia,
       transport: http(rpcUrl),
     });
 
     return client.getLogs({
       address: receiptAddress,
       event: parseAbiItem(
-        "event ReceiptIssued(bytes32 indexed decisionId, address indexed payer, string action, string reason, uint256 amountUsd, string metadataURI)",
+        "event ReceiptIssued(address indexed payer, address indexed payee, uint256 amount, string memo, uint256 timestamp)",
       ),
       fromBlock: "earliest",
       toBlock: "latest",
@@ -60,10 +60,10 @@ async function fetchChainReceipts(): Promise<DashboardReceipt[]> {
   if (!logs) return [];
 
   return logs.map((log, index) => ({
-    id: log.args.decisionId?.slice(0, 10) ?? `chain-${index + 1}`,
-    action: log.args.action ?? "unknown",
-    reason: log.args.reason ?? "No reason emitted.",
-    amountUsd: Number(log.args.amountUsd ?? BigInt(0)) / 100,
+    id: log.transactionHash.slice(0, 10) ?? `chain-${index + 1}`,
+    action: "receipt",
+    reason: log.args.memo ?? "No memo emitted.",
+    amountUsd: Number(log.args.amount ?? BigInt(0)) / 1_000_000,
     payer: log.args.payer ?? "unknown",
     txHash: log.transactionHash,
     source: "chain" as const,

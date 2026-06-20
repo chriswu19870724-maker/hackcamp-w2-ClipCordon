@@ -15,6 +15,9 @@ dist/
 build/
 out/
 coverage/
+*.tsbuildinfo
+.x402-budget.json
+**/.x402-budget.json
 
 # Logs
 *.log

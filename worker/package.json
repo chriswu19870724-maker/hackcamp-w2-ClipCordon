@@ -1,0 +1,13 @@
+{
+  "name": "hackcamp-w2-clipcordon-worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "cd ../agent && node node_modules/tsx/dist/cli.mjs ../worker/src/index.ts",
+    "typecheck": "node ../agent/node_modules/typescript/lib/tsc.js --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node node_modules/next/dist/bin/next dev",
+    "dev:x402-license": "node x402-license-server.mjs",
     "build": "node node_modules/next/dist/bin/next build",
     "start": "node node_modules/next/dist/bin/next start",
     "typecheck": "node node_modules/typescript/lib/tsc.js --noEmit"

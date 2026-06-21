@@ -3,12 +3,15 @@ import { pathToFileURL } from "node:url";
 import { baseSepolia } from "viem/chains";
 import { createWalletClient, http, parseAbi, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import type { PaymentDecision } from "./llm.js";
 import { withExternalCall } from "./external.js";
 
 export type ReceiptInput = {
-  decision: PaymentDecision;
+  decision: {
+    action: string;
+    reason?: string;
+  };
   paymentId: string;
+  memo?: string;
 };
 
 const receiptAbi = parseAbi(["function issueReceipt(address payee, uint256 amount, string memo)"]);
@@ -21,13 +24,24 @@ export async function issueReceipt(
   memo?: string,
 ): Promise<Hex | string | null> {
   if (typeof payeeOrInput !== "string") {
+    const payee = resolveReceiptPayee();
+    const receiptAmount = resolveDecisionReceiptAmount();
+    const receiptMemo = payeeOrInput.memo ?? `${payeeOrInput.decision.action}|${payeeOrInput.decision.reason ?? "decision"}`;
+
+    if (payee) {
+      return issueReceipt(payee, receiptAmount, receiptMemo);
+    }
+
     return withExternalCall({
       label: "receipt RPC call",
-      context: { paymentId: payeeOrInput.paymentId, action: payeeOrInput.decision.action },
+      context: {
+        paymentId: payeeOrInput.paymentId,
+        action: payeeOrInput.decision.action,
+        memo: receiptMemo,
+      },
       rateLimitKey: "public-rpc",
       fn: async () => {
-        console.warn("[warn] receipt placeholder path used; call issueReceipt(payee, amount, memo) for on-chain receipt.");
-        return `mock-receipt-${Date.now()}`;
+        throw new Error("DECISION_RECEIPT_PAYEE/PAYMENT_RECEIPT_PAYEE or wallet private key is required for on-chain decision receipts.");
       },
     });
   }
@@ -64,9 +78,9 @@ function createReceiptWalletClient() {
     throw new Error("EVM_PRIVATE_KEY or WALLET_PRIVATE_KEY must be a 32-byte hex private key.");
   }
 
-  const rpcUrl = process.env.BASE_SEPOLIA_RPC;
+  const rpcUrl = process.env.BASE_SEPOLIA_RPC || process.env.RPC_URL;
   if (!rpcUrl) {
-    throw new Error("BASE_SEPOLIA_RPC is required.");
+    throw new Error("BASE_SEPOLIA_RPC or RPC_URL is required.");
   }
 
   return createWalletClient({
@@ -83,6 +97,37 @@ function getReceiptContractAddress(): Address {
   }
 
   return address.trim() as Address;
+}
+
+function resolveReceiptPayee(): Address | null {
+  for (const value of [process.env.DECISION_RECEIPT_PAYEE, process.env.PAYMENT_RECEIPT_PAYEE]) {
+    const address = normalizeAddress(value);
+    if (address) return address;
+  }
+
+  const privateKey = resolvePrivateKey();
+  if (!privateKey) return null;
+  return privateKeyToAccount(privateKey).address;
+}
+
+function resolveDecisionReceiptAmount(): bigint {
+  const value = process.env.DECISION_RECEIPT_AMOUNT_ATOMIC?.trim();
+  if (!value) return 0n;
+
+  try {
+    return BigInt(value);
+  } catch {
+    console.warn("[warn] DECISION_RECEIPT_AMOUNT_ATOMIC must be an integer; using 0.");
+    return 0n;
+  }
+}
+
+function normalizeAddress(value: string | undefined): Address | null {
+  const address = value?.trim().replace(/^['"]|['"]$/g, "");
+  if (!address) return null;
+  if (/^0x[0-9a-fA-F]{40}$/.test(address)) return address as Address;
+  console.warn("[warn] receipt payee is set but is not a valid EVM address.");
+  return null;
 }
 
 function resolvePrivateKey(): Hex | null {

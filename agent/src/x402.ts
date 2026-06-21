@@ -16,6 +16,14 @@ export type X402PaymentResult = {
   decision: PaymentDecision;
 };
 
+export type X402ServicePaymentResult = {
+  status: "settled" | "paid-response";
+  endpoint: string;
+  paymentId: string;
+  transactionHash: Hex | null;
+  responseBody: unknown;
+};
+
 const BASE_SEPOLIA_NETWORK = "eip155:84532";
 const MAX_TOTAL_BUDGET = parseUnits("1.0", 6);
 const MAX_PER_CALL = parseUnits("0.05", 6);
@@ -59,6 +67,37 @@ export async function payWithX402(decision: PaymentDecision): Promise<X402Paymen
       };
 
       console.log("[x402] placeholder payment result:", result);
+      return result;
+    },
+  });
+}
+
+export async function payForService(endpoint: string, reason: string): Promise<X402ServicePaymentResult | null> {
+  return withExternalCall({
+    label: "x402 service payment",
+    context: { endpoint, reason },
+    rateLimitKey: `x402-service:${endpoint}`,
+    fn: async () => {
+      if (!endpoint) {
+        throw new Error("X402_ENDPOINT or pay_for_service.endpoint is required.");
+      }
+
+      const response = await x402Fetch(endpoint);
+      if (!response) return null;
+
+      const responseBody = await readResponseBody(response);
+      const paymentResponseHeader = response.headers.get("PAYMENT-RESPONSE") ?? response.headers.get("X-PAYMENT-RESPONSE");
+      const transactionHash = extractSettlementTransaction(paymentResponseHeader);
+
+      const result: X402ServicePaymentResult = {
+        status: transactionHash ? "settled" : "paid-response",
+        endpoint,
+        paymentId: `x402-service-${Date.now()}`,
+        transactionHash,
+        responseBody,
+      };
+
+      console.log("[x402] service payment result:", result);
       return result;
     },
   });
@@ -166,6 +205,29 @@ function recordPaymentIfSettled(response: Response): void {
 
   writeBudget(budget);
   pendingPaymentAmount = null;
+}
+
+async function readResponseBody(response: Response): Promise<unknown> {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return text;
+  }
+}
+
+function extractSettlementTransaction(paymentResponseHeader: string | null): Hex | null {
+  if (!paymentResponseHeader) return null;
+
+  try {
+    const settlement = decodePaymentResponseHeader(paymentResponseHeader);
+    return settlement.transaction ? (settlement.transaction as Hex) : null;
+  } catch (error) {
+    console.warn("[warn] failed to decode x402 payment response header.", { error });
+    return null;
+  }
 }
 
 type BudgetState = {
